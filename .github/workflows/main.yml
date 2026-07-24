@@ -40,18 +40,21 @@ jobs:
         # 2. 파일 처리 함수 (중복 로직 방지 및 안정성 강화)
         process_files() {
             local target_dir=$1
-            # 폴더가 실제로 존재하는지 확인
             if [ -d "$target_dir" ]; then
                 find "$target_dir" -name "${MONTH_STR}_*.csv" | while read file; do
                     dest="financial-data-archive/$file"
                     dest_dir=$(dirname "$dest")
-                    
-                    # 💡 여기가 핵심: 복사 전에 무조건 폴더 생성
                     mkdir -p "$dest_dir"
                     
                     if [ -f "$dest" ]; then
-                        # 이미 파일이 있으면 헤더 빼고 이어쓰기
+                        # 이미 파일이 있으면 헤더 빼고 내용만 뒤에 붙이기
                         tail -n +2 "$file" >> "$dest"
+                        
+                        # 💡 핵심: 파일 병합 후 pandas로 즉시 중복 제거 수행
+                        # 1. 파일 전체를 읽어옴
+                        # 2. drop_duplicates()로 중복 삭제
+                        # 3. 덮어쓰기
+                        uv run python -c "import pandas as pd; df = pd.read_csv('$dest'); df.drop_duplicates(inplace=True); df.to_csv('$dest', index=False, encoding='utf-8-sig')"
                     else
                         # 파일이 없으면 그냥 복사
                         cp "$file" "$dest"
