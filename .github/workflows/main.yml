@@ -1,4 +1,4 @@
-name: Hourly Financial Data Pipeline
+name: Hourly Data Pipeline
 on:
   workflow_dispatch:
   # schedule:
@@ -37,36 +37,39 @@ jobs:
         # 1. 아카이브 저장소 클론
         git clone --depth 1 https://x-access-token:${GH_PAT}@github.com/kimsnake/financial-data-archive.git
         
-        # 2. 데이터 동기화 (rsync를 사용하면 폴더 구조가 자동으로 유지됩니다)
-        # data 폴더와 trends 폴더 내의 모든 내용을 아카이브로 복사
-        # 존재하지 않는 파일은 복사, 존재하는 파일(CSV)은 아래 로직으로 병합
-        
-        # 먼저 모든 파일 구조를 복제합니다
-        mkdir -p financial-data-archive/data/finance
-        mkdir -p financial-data-archive/data/trends
-        
-        cp -rn data/finance/* financial-data-archive/data/finance/ 2>/dev/null || :
-        cp -rn trends/* financial-data-archive/trends/ 2>/dev/null || :
-        
-        # 기존에 있던 CSV 파일들에 대해 내용 이어 붙이기 (병합 로직)
-        # 이 루프는 수집된 모든 csv 파일에 대해 동작합니다
-        find data trends -name "${MONTH_STR}_*.csv" | while read file; do
-          dest="financial-data-archive/$file"
-          if [ -f "$dest" ]; then
-            # 파일이 이미 있다면 헤더 제외하고 내용만 뒤에 붙이기
-            tail -n +2 "$file" >> "$dest"
-          else
-            # 파일이 없으면 새로 복사
-            cp "$file" "$dest"
-          fi
-        done
+        # 2. 파일 처리 함수 (중복 로직 방지 및 안정성 강화)
+        process_files() {
+            local target_dir=$1
+            # 폴더가 실제로 존재하는지 확인
+            if [ -d "$target_dir" ]; then
+                find "$target_dir" -name "${MONTH_STR}_*.csv" | while read file; do
+                    dest="financial-data-archive/$file"
+                    dest_dir=$(dirname "$dest")
+                    
+                    # 💡 여기가 핵심: 복사 전에 무조건 폴더 생성
+                    mkdir -p "$dest_dir"
+                    
+                    if [ -f "$dest" ]; then
+                        # 이미 파일이 있으면 헤더 빼고 이어쓰기
+                        tail -n +2 "$file" >> "$dest"
+                    else
+                        # 파일이 없으면 그냥 복사
+                        cp "$file" "$dest"
+                    fi
+                done
+            fi
+        }
+
+        # data 폴더와 trends 폴더 각각 처리
+        process_files "data"
+        process_files "trends"
         
         # 3. 데이터 저장소로 이동 및 푸시
         cd financial-data-archive
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         
-        # 변경 사항 확인 및 푸시
+        # 변경 사항이 있을 때만 푸시
         if [ -n "$(git status --porcelain)" ]; then
           git add .
           git commit -m "Update hourly data: ${MONTH_STR} $(date +'%Y-%m-%d %H:%M')"
