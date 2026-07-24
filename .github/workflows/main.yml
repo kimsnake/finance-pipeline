@@ -1,8 +1,8 @@
 name: Hourly Financial Data Pipeline
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 * * * *'
+  # schedule:
+  #   - cron: '0 * * * *'
 
 jobs:
   build-and-archive:
