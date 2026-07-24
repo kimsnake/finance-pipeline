@@ -125,19 +125,20 @@ CATEGORIES = {
 }
 
 def fetch_financial_data():
-    # KST 시간대 설정 (UTC + 9시간)
+    # KST 시간대 설정
     KST = timezone(timedelta(hours=9))
-    timestamp = datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')  # KST 적용
+    timestamp = datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')
     
-    folder = os.path.join("data", "finance")
-    os.makedirs(folder, exist_ok=True)
-    
-    # month_str도 KST 기준으로 변경
+    base_folder = os.path.join("data", "finance")
     month_str = datetime.now(KST).strftime('%Y%m')
 
-    print(f"[{timestamp}] 금융 데이터 수집 시작 (N/A 모드)...")
+    print(f"[{timestamp}] 금융 데이터 수집 시작...")
 
     for category, tickers in CATEGORIES.items():
+        # 카테고리별 폴더 생성: data/finance/currency/, data/finance/tech/ 등
+        category_folder = os.path.join(base_folder, category)
+        os.makedirs(category_folder, exist_ok=True)
+        
         results = {'timestamp': timestamp}
         print(f"-> 카테고리 수집 중: {category}")
         
@@ -147,18 +148,12 @@ def fetch_financial_data():
                 stock = yf.Ticker(ticker)
                 hist = stock.history(period="1d")
                 
-                # 데이터가 존재하면 값 저장, 없으면 'N/A' 저장
-                if not hist.empty:
-                    results[name] = hist['Close'].iloc[-1]
-                else:
-                    results[name] = 'N/A'
-                    
-            except Exception as e:
-                # 에러 발생 시에도 'N/A'로 저장하여 데이터 무결성 유지
+                results[name] = hist['Close'].iloc[-1] if not hist.empty else 'N/A'
+            except Exception:
                 results[name] = 'N/A'
         
-        # 파일 저장
-        file_path = os.path.join(folder, f"{month_str}_{category}.csv")
+        # 파일 저장 경로를 category 폴더 안으로 설정
+        file_path = os.path.join(category_folder, f"{month_str}_{category}.csv")
         df = pd.DataFrame([results])
         header = not os.path.exists(file_path)
         df.to_csv(file_path, mode='a', header=header, index=False, encoding='utf-8-sig')

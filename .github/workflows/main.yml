@@ -22,31 +22,42 @@ jobs:
     - name: Install dependencies
       run: uv sync
 
-    - name: Run Financial Data Script
-      run: uv run finance_main.py
+    - name: Run Data Collection Scripts
+      run: |
+        uv run finance_main.py || echo "Finance script failed, continuing..."
+        uv run trends_main.py || echo "Trends script failed, continuing..."
 
     - name: Push data to Archive Repo
       env:
         GH_PAT: ${{ secrets.GH_PAT }}
       run: |
-        # 한국 시간대 설정 (TZ 환경변수 설정)
         export TZ='Asia/Seoul'
-        
         MONTH_STR=$(date +%Y%m)
         
         # 1. 아카이브 저장소 클론
         git clone --depth 1 https://x-access-token:${GH_PAT}@github.com/kimsnake/financial-data-archive.git
         
-        # 2. 이번 달 데이터가 있는지 확인하고, 있다면 이어 붙이기
-        # (이 부분은 동일)
-        for file in data/finance/${MONTH_STR}_*.csv; do
-          if [ -f "$file" ]; then
-            filename=$(basename "$file")
-            if [ -f "financial-data-archive/$filename" ]; then
-              tail -n +2 "$file" >> "financial-data-archive/$filename"
-            else
-              cp "$file" "financial-data-archive/$filename"
-            fi
+        # 2. 데이터 동기화 (rsync를 사용하면 폴더 구조가 자동으로 유지됩니다)
+        # data 폴더와 trends 폴더 내의 모든 내용을 아카이브로 복사
+        # 존재하지 않는 파일은 복사, 존재하는 파일(CSV)은 아래 로직으로 병합
+        
+        # 먼저 모든 파일 구조를 복제합니다
+        mkdir -p financial-data-archive/data/finance
+        mkdir -p financial-data-archive/data/trends
+        
+        cp -rn data/finance/* financial-data-archive/data/finance/ 2>/dev/null || :
+        cp -rn trends/* financial-data-archive/trends/ 2>/dev/null || :
+        
+        # 기존에 있던 CSV 파일들에 대해 내용 이어 붙이기 (병합 로직)
+        # 이 루프는 수집된 모든 csv 파일에 대해 동작합니다
+        find data trends -name "${MONTH_STR}_*.csv" | while read file; do
+          dest="financial-data-archive/$file"
+          if [ -f "$dest" ]; then
+            # 파일이 이미 있다면 헤더 제외하고 내용만 뒤에 붙이기
+            tail -n +2 "$file" >> "$dest"
+          else
+            # 파일이 없으면 새로 복사
+            cp "$file" "$dest"
           fi
         done
         
@@ -55,7 +66,7 @@ jobs:
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         
-        # 변경 사항이 있을 때만 푸시
+        # 변경 사항 확인 및 푸시
         if [ -n "$(git status --porcelain)" ]; then
           git add .
           git commit -m "Update hourly data: ${MONTH_STR} $(date +'%Y-%m-%d %H:%M')"
