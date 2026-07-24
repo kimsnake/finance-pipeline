@@ -32,7 +32,7 @@ jobs:
         GH_PAT: ${{ secrets.GH_PAT }}
       run: |
         MONTH_STR=$(date +%Y%m)
-        git clone --depth 1 https://x-access-token:${GH_PAT}@github.com/[kimsnake]/financial-data-archive.git
+        git clone --depth 1 https://x-access-token:${GH_PAT}@github.com/kimsnake/financial-data-archive.git
         cp data/${MONTH_STR}_*.csv financial-data-archive/
         
         cd financial-data-archive
