@@ -2,7 +2,7 @@ import yfinance as yf
 import pandas as pd
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 # 각 카테고리별로 티커를 묶어서 관리하며, 주석으로 상세 설명을 추가했습니다.
 CATEGORIES = {
@@ -125,10 +125,15 @@ CATEGORIES = {
 }
 
 def fetch_financial_data():
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    # KST 시간대 설정 (UTC + 9시간)
+    KST = timezone(timedelta(hours=9))
+    timestamp = datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')  # KST 적용
+    
     folder = os.path.join("data", "finance")
     os.makedirs(folder, exist_ok=True)
-    month_str = datetime.now().strftime('%Y%m')
+    
+    # month_str도 KST 기준으로 변경
+    month_str = datetime.now(KST).strftime('%Y%m')
 
     print(f"[{timestamp}] 금융 데이터 수집 시작 (N/A 모드)...")
 

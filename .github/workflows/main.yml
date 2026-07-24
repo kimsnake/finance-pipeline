@@ -29,20 +29,22 @@ jobs:
       env:
         GH_PAT: ${{ secrets.GH_PAT }}
       run: |
+        # 한국 시간대 설정 (TZ 환경변수 설정)
+        export TZ='Asia/Seoul'
+        
         MONTH_STR=$(date +%Y%m)
         
         # 1. 아카이브 저장소 클론
         git clone --depth 1 https://x-access-token:${GH_PAT}@github.com/kimsnake/financial-data-archive.git
         
-        # 2. 이번 달 데이터가 있는지 확인하고, 있다면 이어 붙이기 (핵심 로직!)
+        # 2. 이번 달 데이터가 있는지 확인하고, 있다면 이어 붙이기
+        # (이 부분은 동일)
         for file in data/finance/${MONTH_STR}_*.csv; do
           if [ -f "$file" ]; then
             filename=$(basename "$file")
             if [ -f "financial-data-archive/$filename" ]; then
-              # 파일이 이미 있으면: 헤더 제외(tail -n +2)하고 내용만 뒤에 붙이기
               tail -n +2 "$file" >> "financial-data-archive/$filename"
             else
-              # 파일이 없으면: 새로 복사하기
               cp "$file" "financial-data-archive/$filename"
             fi
           fi
