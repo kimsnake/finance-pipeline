@@ -23,8 +23,6 @@ jobs:
       run: uv sync
 
     - name: Run Financial Data Script
-      env:
-        OPENWEATHERMAP_API_KEY: ${{ secrets.OPENWEATHERMAP_API_KEY }}
       run: uv run finance_main.py
 
     - name: Push data to Archive Repo
@@ -32,18 +30,26 @@ jobs:
         GH_PAT: ${{ secrets.GH_PAT }}
       run: |
         MONTH_STR=$(date +%Y%m)
-        git clone --depth 1 https://x-access-token:${GH_PAT}@github.com/kimsnake/financial-data-archive.git
-        cp data/${MONTH_STR}_*.csv financial-data-archive/
         
+        # 1. 아카이브 저장소 클론
+        git clone --depth 1 https://x-access-token:${GH_PAT}@github.com/kimsnake/financial-data-archive.git
+        
+        # 2. 이번 달 데이터가 있는지 확인하고 복사
+        if ls data/finance/${MONTH_STR}_*.csv 1> /dev/null 2>&1; then
+          cp data/finance/${MONTH_STR}_*.csv financial-data-archive/
+        else
+          echo "이번 달 데이터 파일이 없습니다. 스킵합니다."
+        fi
+        
+        # 3. 데이터 저장소로 이동 및 푸시
         cd financial-data-archive
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         
-        # 데이터가 변경되었는지 확인
         if [ -n "$(git status --porcelain)" ]; then
           git add .
           git commit -m "Update hourly data: ${MONTH_STR} $(date +'%Y-%m-%d %H:%M')"
           git push
         else
-          echo "No changes to commit"
+          echo "변경 사항이 없어 푸시를 생략합니다."
         fi
