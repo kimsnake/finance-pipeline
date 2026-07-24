@@ -1,0 +1,49 @@
+name: Hourly Financial Data Pipeline
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 * * * *'
+
+jobs:
+  build-and-archive:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        enable-cache: true
+
+    - name: Set up Python
+      run: uv python install 3.11
+
+    - name: Install dependencies
+      run: uv sync
+
+    - name: Run Financial Data Script
+      env:
+        OPENWEATHERMAP_API_KEY: ${{ secrets.OPENWEATHERMAP_API_KEY }}
+      run: uv run finance_main.py
+
+    - name: Push data to Archive Repo
+      env:
+        GH_PAT: ${{ secrets.GH_PAT }}
+      run: |
+        MONTH_STR=$(date +%Y%m)
+        git clone --depth 1 https://x-access-token:${GH_PAT}@github.com/[kimsnake]/financial-data-archive.git
+        cp data/${MONTH_STR}_*.csv financial-data-archive/
+        
+        cd financial-data-archive
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        
+        # 데이터가 변경되었는지 확인
+        if [ -n "$(git status --porcelain)" ]; then
+          git add .
+          git commit -m "Update hourly data: ${MONTH_STR} $(date +'%Y-%m-%d %H:%M')"
+          git push
+        else
+          echo "No changes to commit"
+        fi
